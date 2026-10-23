@@ -1,0 +1,23 @@
+{
+  "name": "nam-web",
+  "version": "0.1.0",
+  "scripts": {
+    "watch": "shadow-cljs watch app",
+    "repl": "shadow-cljs cljs-repl app",
+    "release": "shadow-cljs release app && node scripts/build-sw.js",
+    "dn": "npx wrangler deploy",
+    "dd": "bash scripts/d.sh public",
+    "d": "npm run dd && npm run dn",
+    "dcj": "bash scripts/d.sh cljs",
+    "dc": "bash scripts/d.sh cl",
+    "dj": "bash scripts/d.sh js"
+  },
+  "devDependencies": {
+    "shadow-cljs": "^2.28.0"
+  },
+  "dependencies": {
+    "create-react-class": "^15.7.0",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2"
+  }
+}

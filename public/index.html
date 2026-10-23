@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>NaM</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="alternate icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
+    <style>
+      @font-face {
+        font-family: "PT Mono";
+        src: url("/fonts/pt_mono_regular.ttf") format("truetype");
+        font-weight: normal;
+        font-style: normal;
+      }
+
+      :root {
+        --bg: #0e0e12;
+        --primary: #1b1b22;
+        --accent: #7c5cfc;
+        --surface: #1f1f27;
+        --sending: #4a4a54;
+        --text-main: #f0f0f5;
+        --text-dim: #a0a0ac;
+        --own-id-blue: #4a9eff;
+        --cursor-turquoise: #28d7c0;
+        --setup-red: #a12a27;
+        --input-line: #777780;
+      }
+
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      html,
+      body {
+        height: 100%;
+        overscroll-behavior: none;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text-main);
+        font-family:
+          "PT Mono",
+          -apple-system,
+          monospace;
+        margin: 0;
+      }
+
+      #app {
+        position: relative;
+        z-index: 1;
+        height: 100svh; /* было min-height */
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .app {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* декоративный ASCII-фон (танцующие фигурки из fscroller-скрипта,
+   см. ascii-bg/ascii-bg-frames в core.cljs). Фиксирован на весь экран,
+   за содержимым приложения (z-index 0 vs 1 у #app), кликов не
+   перехватывает и не выделяется как текст. font-size на vw, чтобы
+   70-колоночный кадр аккуратно вписывался что на телефоне, что на
+   десктопе, не оборачиваясь и не обрезаясь по бокам. */
+      .ascii-bg {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-select: none;
+        white-space: pre;
+        font-family: "Lucida Console", "Courier New", monospace;
+        font-size: clamp(4px, 1.6vw, 11px);
+        line-height: 1.15;
+        color: var(--text-dim);
+        opacity: 0.4;
+      }
+
+      .screen {
+        min-height: 100dvh;
+      }
+
+      /* language / setup / wizard: padding(24dp) в оригинале */
+      .language-screen,
+      .setup-screen,
+      .wizard-screen {
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      /* main / compose: padding(16dp) в оригинале */
+      .main-screen {
+        flex: 1;
+        min-height: 0;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .compose-screen {
+        flex: 1;
+        min-height: 0;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .replylog {
+        flex: 1;
+        min-height: 0;
+      }
+      .styled-scroll {
+        touch-action: pan-y;
+        overflow-y: auto;
+        margin-right: -12px;
+        padding-right: 12px;
+      }
+
+      .styled-scroll.scroll-left {
+        direction: rtl;
+        margin-right: 0;
+        margin-left: 0;
+        padding-right: 0;
+        padding-left: 12px;
+      }
+      .styled-scroll.scroll-left > * {
+        direction: ltr;
+      }
+      .styled-scroll::-webkit-scrollbar {
+        width: 5px;
+      }
+      .styled-scroll::-webkit-scrollbar-track {
+        margin-top: 5px;
+        margin-bottom: 5px;
+        background: var(--input-line);
+        border-radius: 3px;
+      }
+      .styled-scroll::-webkit-scrollbar-thumb {
+        border-radius: 3px;
+        background: var(--text-dim);
+      }
+      @media (pointer: coarse) {
+        .styled-scroll {
+          scrollbar-width: none; /* Firefox mobile, на всякий случай */
+        }
+        .styled-scroll::-webkit-scrollbar {
+          display: none;
+        }
+      }
+
+      .lang-option {
+        font-size: 21px;
+        padding: 8px 0;
+        cursor: pointer;
+      }
+
+      .title {
+        font-size: 22px;
+      }
+      .title-red {
+        color: var(--setup-red);
+      }
+
+      .own-id {
+        color: var(--own-id-blue);
+      }
+
+      .row-line.clickable {
+        cursor: pointer;
+      }
+
+      .deco {
+        color: var(--text-dim);
+        font-size: 18px;
+      }
+
+      .section-header {
+        font-weight: bold;
+        font-size: 17px;
+        color: var(--text-dim);
+        padding: 16px 8px;
+        cursor: pointer;
+      }
+      .section-header.expanded {
+        color: var(--accent);
+      }
+
+      .section-body {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .dim-msg {
+        color: var(--text-dim);
+        padding: 8px;
+      }
+
+      .group-header {
+        color: var(--text-dim);
+        font-size: 15px;
+        padding: 6px 0 2px;
+      }
+
+      .row {
+        padding: 18px 12px;
+        cursor: pointer;
+      }
+      .row:hover {
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .row.room-row {
+        display: inline-block;
+        width: fit-content;
+        max-width: 100%;
+        margin-left: auto;
+      }
+
+      .underline-field {
+        width: 100%;
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid var(--input-line);
+        padding: 10px 2px;
+        font-family: inherit;
+        font-size: 18px;
+        color: var(--text-main);
+        caret-color: var(--cursor-turquoise);
+        resize: none;
+        outline: none;
+      }
+
+      .underline-field.autosize {
+        overflow: hidden;
+        transition: height 0.08s ease-out;
+      }
+      .underline-field::placeholder {
+        color: var(--text-dim);
+      }
+      .underline-field.own-id-color {
+        color: var(--own-id-blue);
+      }
+
+      .error-text {
+        color: #ff6b6b;
+        font-size: 14px;
+      }
+
+      .btn-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .btn {
+        border: none;
+        border-radius: 3px; /* ButtonShape в оригинале */
+        padding: 10px 16px;
+        font-size: 14px;
+        font-family: inherit;
+        background: var(--primary);
+        color: var(--text-main);
+        cursor: pointer;
+      }
+      .btn-forward {
+        color: var(--setup-red);
+      }
+      .btn-accent {
+        background: var(--accent);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .btn-sending {
+        background: var(--sending);
+        color: #fff;
+        cursor: default;
+      }
+
+      .top-icons {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        gap: 4px;
+        z-index: 20;
+      }
+
+      .icon-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-dim);
+        font-size: 18px;
+        font-family: inherit;
+        line-height: 1;
+        cursor: pointer;
+        padding: 6px 8px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      /* :hover на тач-устройствах "залипает" после тапа и держится, пока не
+   тапнешь куда-то ещё -- поэтому подсветка на нажатие идёт через :active
+   (снимается сама по pointerup, на любом устройстве), а :hover оставлен
+   только под реальную мышь (@media (hover: hover)), где он и так снимается
+   при уводе курсора и не залипает. :focus-visible вместо голого :focus,
+   чтобы после клика/тапа мышью/пальцем обводка не оставалась висеть --
+   она нужна только при навигации с клавиатуры (Tab). */
+      @media (hover: hover) {
+        .icon-btn:hover {
+          color: var(--text-main);
+          background: rgba(255, 255, 255, 0.06);
+        }
+      }
+      .icon-btn:active {
+        color: var(--text-main);
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .icon-btn:focus {
+        outline: none;
+      }
+      .icon-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+        padding: 16px;
+      }
+
+      .modal {
+        background: var(--surface);
+        border-radius: 10px;
+        padding: 20px;
+        max-width: 460px;
+        width: 100%;
+      }
+
+      .modal-title {
+        font-size: 18px;
+        margin: 0 0 12px;
+        color: var(--text-main);
+      }
+
+      .code-block {
+        background: var(--bg);
+        border-radius: 6px;
+        padding: 12px;
+        font-size: 13px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-x: auto;
+        color: var(--text-main);
+        margin: 0 0 14px;
+      }
+
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        background: var(--surface);
+        color: var(--text-main);
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        max-width: 90vw;
+      }
+      /* ---------------------------------------------------------------------
+   Стили для удаления пакетов отправителя (long-press на group-header,
+   модалка подтверждения с кнопкой drop и распадом текста в шум ▓▒░).
+   Добавить в существующий CSS-файл проекта.
+   ------------------------------------------------------------------- */
+
+      .clear-modal-header {
+        margin-bottom: 12px;
+        font-weight: 600;
+      }
+
+      /* --- drop button: белая, чёрный текст, слегка набухает по мере
+   удержания через CSS-переменную --drop-progress (0..1), обновляемую
+   из ClojureScript через requestAnimationFrame --- */
+      .btn-drop {
+        background: #fff;
+        color: #000;
+        transform: scale(calc(1 + var(--drop-progress, 0) * 0.18));
+        transition: transform 0.05s linear;
+      }
+
+      /* --- сама модалка (оверлей + карточка) прозрачнеет по мере удержания,
+   так что сквозь неё становится виден распадающийся фон (реальные
+   строки пакетов на main-screen, см. decay-line в core.cljs) --- */
+      .clear-overlay {
+        background: rgba(0, 0, 0, calc(0.6 * (1 - var(--drop-progress, 0))));
+        transition: background-color 0.05s linear;
+      }
+
+      .clear-overlay .modal {
+        opacity: calc(1 - var(--drop-progress, 0) * 0.85);
+        transition: opacity 0.05s linear;
+      }
+
+      /* group-header теперь кликабелен по long-press -- курсор подсказывает это на десктопе.
+   На мобильных одного user-select мало: без -webkit-touch-callout iOS всё равно
+   показывает лупу/меню "Copy" поверх pointerdown, а без touch-action браузер может
+   начать собственный жест (скролл/выделение) раньше, чем сработает lp-start!. */
+      .group-header,
+      .own-header,
+      .btn-drop {
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        touch-action: manipulation;
+      }
+
+      /* erase-всё (long-press на own-header): пока идёт wipe, top-icons
+   деактивированы -- показываем это визуально, иначе кнопки выглядят
+   живыми, хотя :disabled и не реагируют на клик */
+      .icon-btn:disabled {
+        cursor: default;
+        opacity: 0.35;
+      }
+
+      .ascii {
+        white-space: pre-wrap;
+      }
+
+      .key-widget {
+        display: flex;
+        align-items: center;
+      }
+
+      .key-seal,
+      .key-glyphs,
+      .key-icon-wrap {
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        touch-action: manipulation;
+        display: inline-flex;
+        align-items: center;
+        transition: color 0.3s ease;
+      }
+      .key-seal {
+        padding: 0 0 0 5px;
+      }
+      .key-icon-wrap {
+        padding: 0 5px 0 0;
+      }
+
+      .key-glyphs {
+        font-size: 21px;
+        letter-spacing: 1px;
+        padding: 0 5px;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .key-glyphs.is-gray {
+        color: var(--text-dim);
+      }
+      .key-glyphs.is-moon {
+        color: var(--moon-key);
+      }
+
+      .key-icon-wrap {
+        color: var(--text-dim);
+      }
+      .key-icon-wrap.is-moon {
+        color: var(--moon-key);
+      }
+
+      .no-key-transition,
+      .no-key-transition * {
+        transition: none !important;
+      }
+      .sending-icons-viewport {
+        display: inline-flex;
+        overflow: hidden;
+        width: 66px; /* ширина ОДНОГО набора из 3 иконок (видимая область) */
+        vertical-align: middle;
+      }
+
+      .sending-icons-track {
+        display: inline-flex;
+        align-items: center;
+        animation: sending-wiggle 1.2s ease-in-out infinite alternate;
+        white-space: nowrap;
+      }
+
+      .sending-icons-track > span {
+        margin-left: 6px;
+      }
+      .sending-icons-track > span:first-child {
+        margin-left: 0;
+      }
+
+      @keyframes sending-wiggle {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-33px);
+        } /* ширина ОДНОГО набора из 3 иконок */
+      }
+
+      .copy-field {
+        font-family: monospace;
+        background: var(--surface);
+        color: var(--setup-red);
+        padding: 1px 5px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .unselect {
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      .section-headers {
+        position: relative;
+        height: calc(var(--section-header-h, 53px) * 2);
+        overflow: hidden;
+      }
+      .section-headers .section-header {
+        position: absolute;
+        left: 0;
+        right: 0;
+        margin: 0;
+      }
+      .slot-top {
+        top: 0;
+      }
+      .slot-bottom {
+        top: var(--section-header-h, 53px);
+      }
+
+      .section-slide-out-left {
+        transform: translateX(-100%);
+        transition: transform 320ms ease;
+      }
+      .section-slide-out-right {
+        transform: translateX(100%);
+        transition: transform 320ms ease;
+      }
+      .section-move-down {
+        transform: translateY(var(--section-header-h, 53px));
+        transition:
+          transform 320ms ease,
+          color 320ms ease;
+      }
+      .section-fade-in {
+        animation: section-fade-in-kf 300ms ease both;
+      }
+      @keyframes section-fade-in-kf {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .section-body-viewport {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        position: relative;
+        touch-action: none;
+      }
+      .section-body-track {
+        display: flex;
+        width: 200%;
+        height: 100%;
+        transition: transform 320ms ease;
+      }
+      .section-body-track > .section-body {
+        width: 50%;
+        flex: 0 0 50%;
+        overflow-y: auto;
+        min-height: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="/js/main.js"></script>
+  </body>
+</html>

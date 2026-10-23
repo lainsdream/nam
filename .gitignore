@@ -1,0 +1,6 @@
+.*/
+public/js
+public/sw*
+scripts/d.sh
+node_modules
+ssh

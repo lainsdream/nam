@@ -1,0 +1,11 @@
+/js/main.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/sw-version.json
+  Cache-Control: no-store
+
+/sw.*.js
+  Cache-Control: no-cache
